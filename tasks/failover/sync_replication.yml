@@ -1,0 +1,12 @@
+- name: Enable synchronous replication
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke replication sync start
+
+- name: Check if Synchronous Replication is enabled.
+  ansible.builtin.uri:
+    url: "https://{{ clusterDNS }}/health"
+    ca_path: "{{ ca_path }}"
+    return_content: yes
+  register: this
+  failed_when: "'potential' not in this.content"

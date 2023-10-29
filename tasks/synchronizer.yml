@@ -1,0 +1,115 @@
+---
+# tasks file for sychnronizer installation
+
+- name: Create folder
+  win_file:
+    path: "{{ synchronizer_extract_folder }}"
+    state: directory
+
+- name: Copy synchronizer package from local source
+  win_copy:
+    src: "{{ synchronizer_zip_file_path }}"
+    dest: "{{ synchronizer_extract_folder }}\\{{ synchronizer_artifact_name }}"
+  register: st
+
+- name: Unzip the synchronizer package
+  win_unzip:
+    src: "{{ synchronizer_extract_folder }}\\{{ synchronizer_artifact_name }}"
+    dest: "{{ synchronizer_extract_folder }}"
+
+- name: Update silent.ini file
+  win_lineinfile:
+    path: "{{ sychronizer_install_folder }}\\silent.ini"
+    regex: '{{ item.srcline }}'
+    line: '{{ item.destline }}'
+    state: present
+  loop:
+    - srcline: InstallationTargetPath=
+      destline: InstallationTargetPath=F:\Program Files\CyberArk\Synchronizer
+    - srcline: PVWAURL=
+      destline: "PVWAURL={{ pvwa_url }}"
+    - srcline: VaultAddress=
+      destline: "VaultAddress={{ vault_adresses }}"
+    - srcline: VaultPort=
+      destline: VaultPort=1858
+    - srcline: VaultName=
+      destline: "VaultName={{ vault_name }}"
+    - srcline: CSyncSafeName
+      destline: "CSyncSafeName={{ csync_safe_name }}"
+    - srcline: ConjurServerDNS=
+      destline: "ConjurServerDNS={{ conjur_server_dns }}"
+    - srcline: ConjurAccount
+      destline: "ConjurAccount={{ conjur_account }}"
+    - srcline: LOBName=
+      destline: "LOBName={{ lob_name }}"
+    - srcline: LOBPlatform=
+      destline: LOBPlatform=CyberArk Vault
+
+- name: Check for current Microsoft .NET Framework version
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full
+    name: Release
+  register: dotnet_version
+
+- name: Print .NET version
+  debug:
+    msg: ".Net Version: {{ dotnet_version.value }}"
+
+- name: Install Microsoft .NET Framework 4.8 if current version is less than 4.8
+  include_tasks: dotnet48_install.yml
+  when: dotnet_version.value < 528040
+
+- name: Check Powershell Version
+  win_shell: |
+    get-host
+  register: gethost
+
+- name: Assign variable for Power Shell Version
+  ansible.builtin.set_fact:
+    psversion: "{{ (gethost.stdout_lines.3).split()|last }}"
+  
+- name: Print Power Shell Version
+  debug:
+    msg: "{{ psversion }}"
+
+- name: Fail if required power shell versiondoes not exist
+  ansible.builtin.fail: 
+    msg: required power shell version  not exists, failing...
+  when: (psversion < "5")
+
+- name: Export PVWA/Conjur credentials
+  win_shell: |
+    cd "{{ sychronizer_install_folder }}"
+    $User = "{{ item.username }}"
+    $Password = ConvertTo-SecureString -String "{{ item.password }}" -AsPlainText -Force
+    {{ item.name }} = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $Password
+  register: results
+  loop:
+    - name: $PVWACredentials
+      username: "{{ pvwa_username }}"
+      password: "{{ pvwa_password }}"
+    - name: $conjurCredentials
+      username: "{{ conjur_username }}"
+      password: "{{ conjur_password }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  
+- name: Run the Installer Script
+  win_shell: |
+     .\V5SynchronizerInstallation.ps1 -silent -trustPVWAAndConjurCert
+  args:
+    chdir: "{{ sychronizer_install_folder }}"
+
+- name: Enable Cleanup Function
+  win_lineinfile:
+    path: F:\Program Files\CyberArk\Synchronizer\VaultConjurSynchronizer.exe.config
+    regex: '“SYNC_CLEANUP” value to “false"'
+    line: '“SYNC_CLEANUP” value to “true"'
+    state: present
+
+- name: Start CyberArk Vault-Conjur Synchronizer service 
+  win_service:
+    name: CyberArk Vault-Conjur Synchronizer
+    start_mode: auto
+    state: started

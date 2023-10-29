@@ -1,0 +1,60 @@
+# Need to install docker python modules to be able to run playbooks written using docker python modules
+- name: Install docker python module
+  ansible.builtin.pip:
+    name: docker
+    extra_args: '--ignore-installed'
+
+- name: Create a directory if it does not exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    # recurse: yes
+    mode: '0775'
+    owner: root
+    group: "{{ unix_group }}"
+  loop:
+    - "{{ remote_sourcefiles }}"
+    - "/apps/{{ containerName }}/config"
+    - "/apps/{{ containerName }}/log"
+    - "/apps/{{ containerName }}/backup"
+    - "/apps/{{ containerName }}/seeds"
+
+- name: Copy the docker image.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ conjur_image_tar_file_name }}"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+
+- name: Copy the Luna Client installer file.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ luna_package_name }}"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+
+- name: Copy the seed file.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ ansible_fqdn | split('.') | first }}.seed"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+
+- name: Copy the seccomp.json file.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/seccomp.json"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+
+- name: Load Conjur image
+  community.docker.docker_image:
+    name: "{{ conjur_image_name }}:{{ conjur_image_tag }}"
+    state: present
+    load_path: "{{ remote_sourcefiles }}/{{ conjur_image_tar_file_name }}"
+    source: load
+    timeout: 200

@@ -1,0 +1,30 @@
+# file: dev
+
+[master]
+# Add here list of hosts or ip adress of  conjur master
+abx.xyz.org
+
+[standby]
+# Add here list of hosts or ip adresses of conjur standby servers
+abx.xyz.org
+abx.xyz.org
+
+
+[followers]
+# Add here list of hosts or ip adresses of conjur follwoer node.
+
+
+[synchronizer]
+# Add here list of hosts or ip adresses of conjur vault synchronizers
+
+
+[conjurcluster:children]
+master
+standby
+
+[linux:children]
+conjurcluster
+followers
+
+[windows:children]
+synchronizer

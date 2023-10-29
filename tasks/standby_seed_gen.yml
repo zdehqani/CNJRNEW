@@ -1,0 +1,13 @@
+
+- name: Create standby seed file
+  ansible.builtin.shell: "docker exec conjur evoke seed standby {{ item }} {{ master_node }} > {{ item | split('.') | first }}.seed"
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+  loop: "{{ standby_node | split(':') }}"
+
+- name: Fetch the seed files from master to ansible server
+  ansible.builtin.fetch:
+    src: "{{ remote_sourcefiles }}/{{ item | split('.') | first }}.seed"
+    dest: "{{ sourcefiles }}/"
+    flat: yes
+  loop: "{{ standby_node | split(':') }}"

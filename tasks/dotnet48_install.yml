@@ -1,0 +1,67 @@
+---
+# tasks file for dotnet 4.8 installation
+
+- name: Install Microsoft .NET Framework 4.8 if current version is less than 4.8
+  win_shell: |
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest https://go.microsoft.com/fwlink/?linkid=2088631 -OutFile C:\Windows\Temp\dotnet.4.8.exe # Download from MS
+    Write-Host "Installing 4.8"
+    Start-Process C:\Windows\Temp\dotnet.4.8.exe -ArgumentList "/q /norestart /log C:\Windows\Temp" -Wait #Fire a new process to install silently
+    Remove-Item -Path C:\Windows\Temp\dotnet.4.8.exe #Delete installer
+    Write-Host "Installed 4.8 $LASTEXITCODE"
+
+- name: Enable AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: AutoAdminLogon
+    data: 1
+
+- name: Set default username for AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: DefaultUsername
+    data: "{{ ansible_user }}"
+
+- name: Set default password for AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: DefaultPassword
+    data: "{{ ansible_password }}"
+  no_log: true
+
+- name: Reboot when PSM Installation requires reboot
+  win_reboot:
+    reboot_timeout: 300
+
+- name: Remove AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: AutoAdminLogon
+    state: absent
+
+- name: Remove username for AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: DefaultUsername
+    state: absent
+
+- name: Remove password for AutoAdminLogon
+  win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon
+    name: DefaultPassword
+    state: absent
+
+- name: Check for Microsoft .NET Framework version
+  win_reg_stat:
+    path: HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full
+    name: Release
+  register: dotnet_version
+
+- name: Print .NET version
+  debug:
+    msg: ".Net Version: {{ dotnet_version.value }}"
+
+- name: Fail if required dotnet version does not exist
+  ansible.builtin.fail: 
+    msg: required dotnet version  not exists, failing...
+  when: dotnet_version.value < 528040

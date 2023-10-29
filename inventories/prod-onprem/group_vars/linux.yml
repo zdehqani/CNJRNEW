@@ -1,0 +1,49 @@
+ansible_user: "{{ hostvars['localhost']['ansible_user'] }}"
+ansible_password: "{{ hostvars['localhost']['ansible_password'] }}"
+
+ansible_become: yes
+ansible_become_method: pbrun
+ansible_become_user: root
+
+remote_sourcefiles: /apps/sourcefile
+sourcefiles: "{{ playbook_dir }}/sourcefiles"
+ca_path: "{{ remote_sourcefiles }}/root-chain.pem"
+unix_group: root
+containerName: conjur
+conjur_image_name: conjur-appliance
+clusterAdminPass: "{{ hostvars['localhost']['clusterAdminPass'] }}"
+accountName: <account_name>
+# remote_seedfiles_dir: /apps/conjur/backup
+
+cluster_cert_keyfile_name: "{{ clusterDNS | split('.') | first }}-key.pem"
+cluster_certfile_name: "{{ clusterDNS | split('.') | first }}.pem"
+
+luna_package_name: 610-000397-005_SW_Linux_Luna_Client_V10.4.1_RevA.tar
+lunasa_client_working_dir: "{{ remote_sourcefiles }}/luna_client"
+lunasa_client_rotate_cert: true
+
+lunasa_hsms:
+  - hostname: "<HSM Host name/ IP>"
+    admin_password: "{{ hostvars['localhost']['hsm_admin_password'] }}"
+    partition: "<partition name>"
+    partition_serial: <partition_serial_number>
+  - hostname: "<HSM Host name/ IP>"
+    admin_password: "{{ hostvars['localhost']['hsm_admin_password'] }}"
+    partition: "partition name"
+    partition_serial: <partition_serial_number>
+  - hostname: "<HSM Host name/ IP>"
+    admin_password: "{{ hostvars['localhost']['hsm_admin_password'] }}"
+    partition: "<partition name>"
+    partition_serial: <partition_serial_number>
+  - hostname: "<HSM Host name/ IP>"
+    admin_password: "{{ hostvars['localhost']['hsm_admin_password'] }}"
+    partition: "partition name"
+    partition_serial: <partition_serial_number>
+
+hsm_partition_pin: "{{ hostvars['localhost']['hsm_partition_pin'] }}"
+luna_ha_log_path: /usr/safenet/lunaclient/
+hsm_wrapping_key: CONJUR
+lunasa_ha_label: CONJUR_HA
+
+source_backup_dir: '/ConjurBackup'
+destination_backup_dir: '/apps/conjur/backup'

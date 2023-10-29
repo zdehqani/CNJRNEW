@@ -1,0 +1,24 @@
+[master]
+conjur1-poc.xyz.org
+
+[standby]
+conjur2-poc.xyz.org
+conjur3-poc.xyz.org
+
+[followers]
+conjur5-poc.xyz.org
+
+[synchronizer]
+# Add here list of hosts or ip adresses of conjur vault synchronizers
+#conjur4-poc.xyz.org
+
+[conjurcluster:children]
+master
+standby
+
+[linux:children]
+conjurcluster
+followers
+
+[windows:children]
+synchronizer

@@ -1,0 +1,8 @@
+- name: Pass input parameters to relevant nodes
+  ansible.builtin.set_fact:
+    ansible_user: "{{ ansible_user }}"
+    ansible_password: "{{ ansible_password }}"
+    hsm_partition_pin: "{{ hsm_partition_pin }}"
+    hsm_admin_password: "{{ hsm_admin_password }}"
+    clusterAdminPass: "{{ clusterAdminPass | default('CyberArk1234#') }}"
+  no_log: true

@@ -1,0 +1,26 @@
+
+- name: Create directory sourcefiles
+  ansible.builtin.file:
+    path: sourcefiles
+    state: directory
+
+- name: Download the conjur docker image
+  ansible.builtin.get_url:
+    url:  " {{ conjur_tarfile }} "
+    dest: sourcefiles/
+
+- name: Download the pfx certificate files
+  ansible.builtin.unarchive:
+    src: " {{ pfx_certfile }} "
+    dest: sourcefiles/
+    remote_src: yes
+
+- name: Generate the docker seccomp.json file
+  ansible.builtin.template:
+    src: template/seccomp.j2
+    dest: sourcefiles/seccomp.json
+ 
+- name: Download the HSM Luna CLient file
+  ansible.builtin.get_url:
+    url:  " {{ luna_clientfile }} "
+    dest: sourcefiles/

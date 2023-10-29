@@ -1,0 +1,23 @@
+# Suspends replication on all instances except the stopped master
+- name: Install docker python module
+  ansible.builtin.pip:
+    name: docker
+    extra_args: '--ignore-installed'
+    
+- name: Check for conjur container
+  community.docker.docker_container_info:
+    name: conjur
+  register: result
+
+- name: Suspending replication
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke replication stop"
+  when: result.exists
+
+- name: Verifying replication is suspended
+  uri:
+    url: "https://{{ ansible_fqdn }}/health"
+    validate_certs: no
+  register: hc_result
+  failed_when: hc_result.json.database.replication_status.streaming

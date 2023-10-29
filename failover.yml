@@ -1,0 +1,65 @@
+---
+# file: main.yml
+#
+# A playbook to automate promoting a standby conjur server to master. It does
+# stop and delete the old master's conjur container if it can, but it makes no
+# effort to rebuild the old master as a standby
+- hosts: localhost
+  connection: local
+
+  vars_prompt:
+    - name: standby
+      prompt: "Please enter the FQDN of the standby to be promoted to master"
+
+    - name: master
+      prompt: "Please enter the FQDN of the master to be demoted"
+
+  tasks:
+    - name: Setting facts
+      ansible.builtin.set_fact:
+        standby: "{{ standby }}"
+        master: "{{ master }}"
+
+# just in case, try to stop the conjur container on the master
+- name: Stop conjur container on master
+  hosts: "{{ master }}"
+  tasks:
+    - include_tasks: tasks/failover/stop_master.yml
+
+# suspend replication on all servers but the master
+- name: Suspend replication on all servers but the master
+  hosts: "conjurcluster:followers:!{{master}}:!{{standby}}"
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/failover/suspend_replication.yml
+
+# run the rebase dry-run test on the standby
+- name: Run the rebase dry-run test on the standby
+  hosts: "{{ standby }}"
+  tasks:
+    - include_tasks: tasks/failover/rebase_dryrun.yml
+
+# run the rebase for reals this time
+- name: Run the rebase for reals this time
+  hosts: "conjurcluster:followers:!{{master}}:!{{standby}}"
+  strategy: free
+  tasks:
+    - include_tasks: tasks/failover/rebase.yml
+
+# promote the standby to master
+- name: Promote the standby to master
+  hosts: "{{ standby }}"
+  tasks:
+    - include_tasks: tasks/failover/promote_standby.yml
+
+#enable sync replication on new primary and standby
+#- name: Enable Synchronous Replication
+  #hosts: "{{ standby }}"
+  #tasks:
+   # - include_tasks: tasks/failover/sync_replication.yml
+    
+# try to delete the conjur container on the master
+#- hosts: "{{ master }}"
+  #tasks:
+   # - include_tasks: destroy_master.yml

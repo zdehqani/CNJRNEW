@@ -1,0 +1,49 @@
+---
+# file: main.yml
+
+- hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: ansible_password
+      prompt: "Please enter the administrator password for remote host"
+      private: yes
+
+    - name: target_node
+      prompt: "Please enter the target host to perform HSM Integration"
+  
+    - name: hsm_partition_pin
+      prompt: "Please enter the HSM Partition password"
+      private: yes
+
+    - name: hsm_admin_password
+      prompt: "Please enter the HSM admin password"
+      private: yes
+
+  tasks:
+    - include_tasks: tasks/set_facts.yml 
+    - include_tasks: tasks/download_files.yml
+
+    - name: Create directory sourcefiles
+      ansible.builtin.file:
+        path: sourcefiles
+        state: directory
+
+    - name: Download the HSM Luna CLient file
+      ansible.builtin.get_url:
+        url:  " {{ luna_clientfile }} "
+        dest: sourcefiles/
+
+- name: Prepare the servers for deployment
+  hosts: "{{ target_node }}"
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/install_docker.yml
+    - include_tasks: tasks/prerequsite.yml
+
+- name: Perform HSM Integration HSM integration
+  hosts: "{{ target_node }}"
+  serial: 1
+
+  tasks:
+    - include_tasks: tasks/hsm_integration.yml

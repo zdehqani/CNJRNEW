@@ -1,0 +1,72 @@
+- name: Install docker python module
+  ansible.builtin.pip:
+    name: docker
+    extra_args: '--ignore-installed'
+    
+- name: Copy the follower certificate.pem file.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ item | split('.') | first }}.pem"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+  loop: "{{ follower_node | split(':') }}"
+
+- name: Copy the follower certificate-key.pem file.
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ item | split('.') | first }}-key.pem"
+    dest: "{{ remote_sourcefiles }}/"
+    owner: root
+    group: "{{ unix_group }}"
+    mode: '0664'
+  loop: "{{ follower_node | split(':') }}"
+    
+- name : Find the pem files in sourcefile directory
+  ansible.builtin.find:
+    paths: "{{ remote_sourcefiles }}"
+    patterns: '*.pem'
+    recurse: no
+  register: output
+
+- name: copy PEM Certificates to /apps/conjur/backup folder
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: /apps/conjur/backup/
+    remote_src: yes
+  loop: "{{ output.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Decrypt the keys
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke keys decrypt-all"
+    
+- name: Import Follower Certificate
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke ca import --key /opt/conjur/backup/{{ item | split('.') | first }}-key.pem /opt/conjur/backup/{{ item | split('.') | first }}.pem"
+  loop: "{{ follower_node | split(':') }}"
+
+- name: Encrypt keys
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke keys encrypt
+
+- name: Create Seed Directory
+  ansible.builtin.file:
+    path: /apps/conjur/seeds
+    state: directory
+      
+- name: Create follower seed file
+  ansible.builtin.shell: "docker exec conjur evoke seed follower {{ item }} {{ clusterDNS }} > {{ item | split('.') | first }}.seed"
+  args:
+    chdir: /apps/conjur/seeds
+  loop: "{{ follower_node | split(':') }}"
+
+- name: Fetch the seed files from master to ansible server
+  ansible.builtin.fetch:
+    src: "{{ remote_seedfiles_dir }}/{{ item | split('.') | first }}.seed"
+    dest: "{{ sourcefiles }}/"
+    flat: yes
+  loop: "{{ follower_node | split(':') }}"

@@ -1,0 +1,40 @@
+- name : Find the pfx files in sourcefiles directory
+  ansible.builtin.find:
+    paths: "{{ sourcefiles }}"
+    patterns: '*.pfx'
+    recurse: no
+  register: output
+
+- name: Initialize pfx_cert_files varibale
+  ansible.builtin.set_fact:
+    pfx_cert_files: "{{ pfx_cert_files | default([]) }} + {{ [item.path | basename] }}"
+  loop: '{{ output.files }}'
+
+- name: Conjur Cluster and Follower Key Extraction
+  ansible.builtin.shell: "openssl pkcs12 -in {{ item }} -nocerts -nodes -out {{ item | split('.') | first }}-key.pem -password pass:{{ certPassword }}"
+  no_log: true
+  args:
+    chdir: "{{ sourcefiles }}"
+    creates: "{{ sourcefiles }}/{{ item | split('.') | first }}-key.pem"
+  loop: "{{ pfx_cert_files }}"
+
+- name: Conjur Cluster and Follower Cert Extraction
+  ansible.builtin.shell: "openssl pkcs12 -in {{ item }} -clcerts -nokeys -password pass:{{ certPassword }} | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > {{ item | split('.') | first }}.pem"
+  no_log: True
+  args:
+    chdir: "{{ sourcefiles }}"
+    creates: "{{ sourcefiles }}/{{ item | split('.') | first }}.pem"
+  loop: "{{ pfx_cert_files }}"
+
+- name: Conjur Cluster Root Chain Extraction
+  ansible.builtin.shell: "openssl pkcs12 -in {{ clusterDNS }}.pfx -info -nokeys -cacerts -password pass:{{ certPassword }} | sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' > root-chain.pem"
+  no_log: True
+  args:
+    chdir: "{{ sourcefiles }}"
+    creates: "{{ sourcefiles }}/root-chain.pem"
+
+- name: Verify the certificates
+  ansible.builtin.shell: "openssl verify -CAfile root-chain.pem {{ item | split('.') | first }}.pem"
+  args:
+    chdir: "{{ sourcefiles }}"
+  loop: "{{ pfx_cert_files }}"

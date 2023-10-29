@@ -1,0 +1,76 @@
+---
+# file: main.yml
+
+- hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: ansible_password
+      prompt: "Please enter the administrator password for remote host"
+      private: yes
+      
+    - name: clusterAdminPass
+      prompt: "Please enter the initial cluster admin password"
+      private: yes
+
+    - name: certPassword
+      prompt: "Please enter the password for pfx certificate file"
+      private: yes
+
+    - name: hsm_partition_pin
+      prompt: "Please enter the HSM Partition password"
+      private: yes
+
+    - name: hsm_admin_password
+      prompt: "Please enter the HSM admin password"
+      private: yes
+
+    # - name: pvwa_password
+    #   prompt: "Please enter the PVWA credentials password"
+    #   private: yes
+
+    # - name: conjur_password
+    #   prompt: "Please enter the Conjur credentials password"
+    #   private: yes
+
+  tasks:
+    - include_tasks: tasks/set_facts.yml
+    - include_tasks: tasks/download_files.yml
+    - include_tasks: tasks/cert-gen.yml
+
+- name: Prepare the servers for deployment
+  hosts: linux
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/install_docker.yml
+    - include_tasks: tasks/prerequsite.yml
+
+- name: Perform HSM integration on conjur cluster nodes
+  hosts: linux
+  serial: 1
+
+  tasks:
+    - include_tasks: tasks/hsm_integration.yml
+
+- name: Deploy Conjur master
+  hosts: master  
+  tasks:
+    - include_tasks: tasks/master.yml
+
+- name: Deploy Standby and Followers
+  hosts: standby:followers
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/standby.yml
+      when: "'standby' in group_names"
+
+    - include_tasks: tasks/follower.yml
+      when: "'followers' in group_names"
+
+- name: Enable Synchronous Replication
+  hosts: master  
+  tasks:
+    - include_tasks: tasks/sync_replication.yml
+      vars:
+        deployment_type: 'cluster'

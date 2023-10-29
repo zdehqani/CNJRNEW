@@ -1,0 +1,27 @@
+- name: Install docker python module
+  ansible.builtin.pip:
+    name: docker
+    extra_args: '--ignore-installed'
+    
+- name: Check for conjur container
+  community.docker.docker_container_info:
+    name: conjur
+  register: result
+  
+- name: Rebasing clients to new master
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke replication rebase {{ standby }}"
+  register: rc
+  when: result.exists
+  failed_when: >
+    ( "Replication master switched to" not in rc.stdout ) or
+    ( "Running handlers complete" not in rc.stdout ) 
+
+- name: Validating replication is resumed
+  uri:
+    url: "https://{{ ansible_fqdn }}/health"
+    validate_certs: no
+    status_code: 502
+  register: hc_result
+  failed_when: not hc_result.json.database.replication_status.streaming

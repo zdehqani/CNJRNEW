@@ -1,0 +1,17 @@
+- name: Promoting "{{ standby }}" to master
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke role promote"
+  register: result
+  failed_when: >
+    ("Running handlers complete" not in result.stdout ) or
+    (result.rc != 0)
+
+- name: Validating standby is promoted
+  uri:
+    url: "https://{{ ansible_fqdn }}/health"
+    validate_certs: no
+  register: hc_result
+  failed_when: >
+    (not hc_result.json.ok) or
+    (hc_result.json.role != "master")

@@ -1,0 +1,5 @@
+- name: Destroying conjur container on old master "{{ master }}"
+  community.docker.docker_container:
+    name: conjur
+    state: absent
+

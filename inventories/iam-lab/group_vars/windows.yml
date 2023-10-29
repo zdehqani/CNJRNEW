@@ -1,0 +1,33 @@
+---
+# file: group_vars/windows
+any_errors_fatal: false
+ansible_python_interpreter: python
+ansible_winrm_server_cert_validation: ignore
+ansible_connection: winrm
+ansible_winrm_transport: credssp
+ansible_port: 5986
+ansible_winrm_read_timeout_sec: 800
+ansible_winrm_operation_timeout_sec: 600
+
+ansible_user: "{{ hostvars['localhost']['ansible_user'] }}"
+ansible_password: "{{ hostvars['localhost']['ansible_password'] }}"
+ansible_become: yes
+ansible_become_method: runas
+ansible_become_user: "{{ ansible_user }}"
+ansible_become_password: "{{ ansible_password }}"
+ansible_become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+
+pvwa_username: administrator
+conjur_username: administrator
+sychronizer_install_folder: "{{ synchronizer_extract_folder }}\\Installation"
+synchronizer_extract_folder: E:\Software\Synchronizer
+synchronizer_zip_file_path: "{{ playbook_dir }}/sourcefiles/{{ synchronizer_artifact_name }}"
+synchronizer_artifact_name: VaultConjurSynchronizer-Rls-v12.3.1.zip
+
+pvwa_url: <PVWA URL>
+vault_adresses: <Vault IP>
+vault_name: vault-lab
+csync_safe_name: ConjurVaultSyncSafe
+conjur_server_dns: conjurcluster-poc.xyz.org
+conjur_account: iamlab
+lob_name: LOB-1 

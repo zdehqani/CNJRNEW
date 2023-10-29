@@ -1,0 +1,132 @@
+- name: Remove existing Conjur container
+  community.docker.docker_container:
+    name: "{{ containerName }}"
+    state: absent
+
+- name: Run conjur docker container on master server
+  ansible.builtin.shell: |
+    docker run \
+    --name {{ containerName }} \
+    --detach \
+    --restart=unless-stopped \
+    --security-opt seccomp=seccomp.json \
+    --publish "443:443" \
+    --publish "444:444" \
+    --publish "5432:5432" \
+    --publish "1999:1999" \
+    --log-driver journald \
+    --volume /apps/conjur/config:/etc/conjur/config:z \
+    --volume /apps/conjur/log:/var/log/conjur:Z \
+    --volume /apps/conjur/backup:/opt/conjur/backup:z \
+    --volume /usr/safenet/lunaclient:/usr/safenet/lunaclient:ro \
+    -e ChrystokiConfigurationPath=/opt/conjur/etc \
+    {{ conjur_image_name }}:{{ conjur_image_tag }}
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+
+- name: Create Link files for HSM Integration
+  community.docker.docker_container_exec:
+    container: "{{ containerName }}"
+    command: "{{ item }}"
+    chdir: /tmp
+  loop:
+    - "ln -s /etc/conjur/config/pkcs11.yml /opt/conjur/etc/pkcs11.yml"
+    - "ln -s /etc/conjur/config/Chrystoki.conf /opt/conjur/etc/Chrystoki.conf"
+
+- name: Validate HSM Integration
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke pkcs11 status
+  ignore_errors: yes
+  register: st
+
+- name: Fail if HSM Integration is not configured properly
+  ansible.builtin.fail:
+    msg: "The HSM Integration is not configured properly: {{ st.stderr }}"
+  when: st.rc != 0
+
+- name: Configure as Master
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke configure master --accept-eula --hostname {{ clusterDNS }} --admin-password {{ clusterAdminPass }} {{ accountName }}"
+    
+- name : Find the pem files in sourcefile directory
+  ansible.builtin.find:
+    paths: "{{ remote_sourcefiles }}"
+    patterns: '*.pem'
+    recurse: no
+  register: output
+
+- name: copy PEM Certificates to /apps/conjur/backup folder
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: /apps/conjur/backup/
+    remote_src: yes
+  loop: "{{ output.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Import Certificates
+  block:
+    - name: Import Root Chain Certificate
+      community.docker.docker_container_exec:
+        container: conjur
+        command: evoke ca import --force --root /opt/conjur/backup/root-chain.pem
+
+    - name: Import cluster Certificate
+      community.docker.docker_container_exec:
+        container: conjur
+        command: "evoke ca import --key /opt/conjur/backup/{{ cluster_cert_keyfile_name }} --set /opt/conjur/backup/{{ cluster_certfile_name }}"
+
+    - name: Import Follower Certificate
+      community.docker.docker_container_exec:
+        container: conjur
+        command: "evoke ca import --key /opt/conjur/backup/{{ item | split('.') | first }}-key.pem /opt/conjur/backup/{{ item | split('.') | first }}.pem"
+      loop: "{{ groups['followers'] }}"
+
+
+- name: Generate Key Encryption Key
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke pkcs11 generate
+  register: result
+  failed_when: result.rc != 0 and "Key with ID \"{{ hsm_wrapping_key }}\" already exists!" not in result.stderr
+
+- name: Wrap the master key
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke pkcs11 wrap
+
+- name: Encrypt Conjur Master keys
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke keys encrypt
+
+- name: Validate the Key Encryption
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke keys show-master-key
+
+- name: Unlock the Master keys
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke keys unlock
+
+- name: Create standby seed file
+  ansible.builtin.shell: "docker exec conjur evoke seed standby {{ item }} {{ groups['master'] | first }} > {{ item | split('.') | first }}.seed"
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+  loop: "{{ groups['standby'] }}"
+
+- name: Create follower seed file
+  ansible.builtin.shell: "docker exec conjur evoke seed follower {{ item }} {{ clusterDNS }} > {{ item | split('.') | first }}.seed"
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+  loop: "{{ groups['followers'] }}"
+
+- name: Fetch the seed files from master to ansible server
+  ansible.builtin.fetch:
+    src: "{{ remote_sourcefiles }}/{{ item | split('.') | first }}.seed"
+    dest: "{{ sourcefiles }}/"
+    flat: yes
+  loop: "{{ groups['standby'] }} + {{ groups['followers'] }}"

@@ -1,0 +1,67 @@
+- name: Remove existing Conjur container
+  community.docker.docker_container:
+    name: "{{ containerName }}"
+    state: absent
+
+- name: Run conjur docker container on standby servers
+  ansible.builtin.shell: |
+    docker run \
+    --name {{ containerName }} \
+    --detach \
+    --restart=unless-stopped \
+    --security-opt seccomp=seccomp.json \
+    --publish "443:443" \
+    --publish "444:444" \
+    --publish "5432:5432" \
+    --publish "1999:1999" \
+    --log-driver journald \
+    --volume /apps/conjur/config:/etc/conjur/config:z \
+    --volume /apps/conjur/log:/var/log/conjur:Z \
+    --volume /apps/conjur/backup:/opt/conjur/backup:z \
+    --volume /usr/safenet/lunaclient:/usr/safenet/lunaclient:ro \
+    -e ChrystokiConfigurationPath=/opt/conjur/etc \
+    {{ conjur_image_name }}:{{ conjur_image_tag }}
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+
+- name: Create Link files for HSM Integration
+  community.docker.docker_container_exec:
+    container: "{{ containerName }}"
+    command: "{{ item }}"
+    chdir: /tmp
+  loop:
+    - "ln -s /etc/conjur/config/pkcs11.yml /opt/conjur/etc/pkcs11.yml"
+    - "ln -s /etc/conjur/config/Chrystoki.conf /opt/conjur/etc/Chrystoki.conf"
+
+- name: Validate HSM Integration
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke pkcs11 status
+  ignore_errors: yes
+  register: st
+
+- name: Fail if HSM Integration is not configured properly
+  ansible.builtin.fail:
+    msg: "The HSM Integration is not configured properly: {{ st.stderr }}"
+  when: st.failed
+
+- name: copy seed file to standby server
+  ansible.builtin.copy:
+    src: "{{ sourcefiles }}/{{ ansible_fqdn | split('.') | first }}.seed"
+    dest: "{{ remote_sourcefiles }}"
+
+- name:  Unpack standby seed file on standby server
+  ansible.builtin.shell: "cat {{ ansible_fqdn | split('.') | first }}.seed | docker exec -i conjur evoke unpack seed -"
+  args:
+    chdir: "{{ remote_sourcefiles }}"
+
+# - name: Unpack standby seed file on standby server
+#   community.docker.docker_container_exec:
+#     container: conjur
+#     command: "evoke unpack seed {{ ansible_fqdn | split('.') | first }}.seed"
+#     chdir: opt/conjur/backup
+
+- name: Configure standby server
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke keys exec -m -- evoke configure standby"

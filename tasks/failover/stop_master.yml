@@ -1,0 +1,11 @@
+# Stops the conjur docker container if it exists to be stopped
+- name: Check for conjur container
+  community.docker.docker_container_info:
+    name: conjur
+  register: result
+
+- name: Stopping conjur on "{{ master }}"
+  community.docker.docker_container:
+    name: conjur
+    state: stopped
+  when: result.exists

@@ -1,0 +1,49 @@
+# Need to install docker python modules to be able to run playbooks written using docker python modules
+- name: Install docker python module
+  ansible.builtin.pip:
+    name: docker
+    extra_args: '--ignore-installed'
+
+- name: Preform health check on Cluster DNS and master node
+  ansible.builtin.uri:
+    url: "https://{{ item }}/health"
+    ca_path: "{{ ca_path }}"
+  loop:
+    - "{{ clusterDNS }}"
+    - "{{ groups['master'] | first }}"
+  register: hc_result
+  failed_when: hc_result['json']['role'] != 'master' or not hc_result['json']['ok']
+  when: 'deployment_type == "cluster"'
+
+- name: Preform health check on standby nodes
+  ansible.builtin.uri:
+    url: "https://{{ item }}/health"
+    ca_path: "{{ ca_path }}"
+  loop: "{{ groups['standby'] }}"
+  register: hc_result
+  failed_when: hc_result['json']['role'] != 'standby' or not hc_result['json']['ok']
+  when: 'deployment_type == "cluster"'
+
+- name: Preform health check on follower node
+  ansible.builtin.uri:
+    url: "https://{{ item }}/health"
+    ca_path: "{{ ca_path }}"
+  loop: "{{ groups['followers'] }}"
+  register: hc_result
+  failed_when: hc_result['json']['role'] != 'follower' or not hc_result['json']['ok']
+  when: 'deployment_type == "cluster"'
+
+- name: Enable synchronous replication
+  community.docker.docker_container_exec:
+    container: conjur
+    command: evoke replication sync start --force
+  
+- name: Check if Synchronous Replication is enabled.
+  ansible.builtin.uri:
+    url: "https://{{ clusterDNS }}/health"
+    # ca_path: "{{ ca_path }}"
+    validate_certs: false
+    return_content: yes
+  register: this
+  failed_when: "'potential' not in this.content"
+ 

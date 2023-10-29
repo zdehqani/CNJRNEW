@@ -1,0 +1,14 @@
+- name: Check for conjur container
+  community.docker.docker_container_info:
+    name: conjur
+  register: result
+
+- name: Validating rebase target
+  community.docker.docker_container_exec:
+    container: conjur
+    command: "evoke replication rebase --dry-run {{ standby }}"
+  register: rc
+  when: result.exists
+  failed_when: >
+    ("valid replication upstream" not in rc.stdout ) or
+    ( rc.stderr != '' )

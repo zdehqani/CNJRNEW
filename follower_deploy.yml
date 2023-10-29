@@ -1,0 +1,54 @@
+---
+# file: follower_deploy.yml
+
+- hosts: localhost
+  connection: local
+  vars_prompt:
+    - name: master_node
+      prompt: "Please enter the FQDN of the master node"
+
+    - name: follower_node
+      prompt: "Please enter the FQDN of the followere node to be configured"
+
+    - name: ansible_password
+      prompt: "Please enter the administrator password for remote host"
+      private: yes
+
+    - name: certPassword
+      prompt: "Please enter the password for pfx certificate file"
+      private: yes
+
+  tasks:
+    - include_tasks: tasks/set_facts.yml
+    - include_tasks: tasks/download_files.yml
+    - include_tasks: tasks/cert-gen.yml    
+
+- name: Create the seed files
+  hosts: "{{ master_node }}"
+
+  tasks:
+    - include_tasks: tasks/follower_seed_gen.yml
+
+- name: Ensure Prerequisites are met on Follower servers
+  hosts: "{{ follower_node }}"
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/install_docker.yml
+    - include_tasks: tasks/follower_prerequsite.yml
+
+- name: Perform HSM Integration
+  hosts: "{{ follower_node }}"
+
+  tasks:
+    - include_tasks: tasks/hsm_integration.yml
+      when: hsm_integartion|bool == true
+
+- name: Deploy follower servers
+  hosts: "{{ follower_node }}"
+  strategy: free
+
+  tasks:
+    - include_tasks: tasks/follower.yml
+      vars:
+        deployment_type: 'follower'

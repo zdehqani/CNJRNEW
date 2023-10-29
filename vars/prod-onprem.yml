@@ -1,0 +1,8 @@
+sourcefiles: "{{ playbook_dir }}/sourcefiles"
+conjur_image_tar_file_name: "conjur-appliance-Rls-v12.9.tar"
+conjur_image_tag: '12.9.0'
+clusterDNS: 'conjurcluster.xyz.org'
+followerDNS: 'conjur.xyz.org'
+conjur_tarfile: "<URL to download conjur image tar file>/{{ conjur_image_tar_file_name }}"
+pfx_certfile: "<URL to download conjur certificates zip file>/"
+luna_clientfile: "<URL to download luna client file>/610-000397-005_SW_Linux_Luna_Client_V10.4.1_RevA.tar"

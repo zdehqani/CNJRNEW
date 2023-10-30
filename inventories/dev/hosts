@@ -2,21 +2,22 @@
 
 [master]
 # Add here list of hosts or ip adress of  conjur master
-abx.xyz.org
+10.10.10.35
 
 [standby]
 # Add here list of hosts or ip adresses of conjur standby servers
-abx.xyz.org
-abx.xyz.org
+#abx.xyz.org
+#abx.xyz.org
 
 [followers]
 # Add here list of hosts or ip adresses of conjur follwoer node.
-abx.xyz.org
-abx.xyz.org
+#abx.xyz.org
+#abx.xyz.org
 
 [synchronizer]
 # Add here list of hosts or ip adresses of conjur vault synchronizers
-abx.xyz.org
+#abx.xyz.org
+#abx.xyz.org
 
 [conjurcluster:children]
 master
